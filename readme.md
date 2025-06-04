@@ -14,7 +14,6 @@ Dataset yang digunakan diambil dari [MyAnimeList Database via Kaggle](https://ww
 
 * Bagaimana cara menyajikan rekomendasi anime yang relevan untuk setiap pengguna berdasarkan histori dan preferensi?
 * Bagaimana cara memastikan bahwa sistem rekomendasi dapat beradaptasi terhadap berbagai jenis pengguna (baru/lama)?
-* Sejauh mana sistem ini dapat meminimalisir kesalahan prediksi rekomendasi yang diberikan?
 
 ### Goals
 
@@ -35,18 +34,60 @@ Dataset yang digunakan diambil dari [MyAnimeList Database via Kaggle](https://ww
 
 ### Struktur Dataset
 
-* `anime.csv` (\~12.000 anime): Informasi judul, genre, rating, dll.
-* `rating.csv` (\~7 juta entri): Rating pengguna terhadap berbagai anime.
+- `anime.csv`: 12.294 baris × 7 kolom
+- `rating.csv`: 7.813.737 baris × 3 kolom
 
 ### Kondisi Data
 
-* Terdapat missing values pada kolom `genre`, `episodes`, dan `rating`.
-* Nilai rating -1 digunakan sebagai indikator bahwa pengguna belum memberikan rating.
+- Kolom `genre` memiliki missing value dan diisi dengan string kosong.
+- Kolom `episodes` tidak memiliki missing value.
+- Rating `-1` menandakan user belum memberikan rating.
 
 ### Fitur Dataset
 
 * `anime.csv`: `anime_id`, `name`, `genre`, `type`, `episodes`, `rating`, `members`
 * `rating.csv`: `user_id`, `anime_id`, `rating`
+
+# Deskripsi DataFrame Anime
+
+DataFrame ini berisi informasi mengenai anime dengan total 12.294 baris dan 7 kolom sebagai berikut:
+
+| No | Nama Kolom | Tipe Data | Jumlah Data Tidak Kosong | Keterangan                |
+|----|------------|-----------|-------------------------|---------------------------|
+| 0  | anime_id   | int64     | 12.294                  | ID unik untuk setiap anime |
+| 1  | name       | object    | 12.294                  | Nama anime                |
+| 2  | genre      | object    | 12.232                  | Genre anime, terdapat 62 nilai kosong |
+| 3  | type       | object    | 12.269                  | Jenis anime (TV, Movie, dll), ada 25 nilai kosong |
+| 4  | episodes   | object    | 12.294                  | Jumlah episode, disimpan sebagai string |
+| 5  | rating     | float64   | 12.064                  | Rating anime, ada 230 nilai kosong |
+| 6  | members    | int64     | 12.294                  | Jumlah anggota yang mengikuti anime |
+
+## Penjelasan:
+
+- **anime_id** merupakan kolom numerik bertipe integer yang berfungsi sebagai identifikasi unik setiap anime.
+- **name** adalah nama anime dalam bentuk teks (string).
+- **genre** berisi genre anime dan memiliki beberapa nilai kosong (missing values), sehingga perlu penanganan jika ingin diolah lebih lanjut.
+- **type** menunjukkan jenis anime (seperti TV, OVA, Movie, dll) dan juga memiliki beberapa nilai kosong.
+- **episodes** disimpan dalam tipe data objek (string), ini biasanya karena beberapa anime mungkin memiliki format episode yang tidak berupa angka tetap (misal "Unknown", "Special").
+- **rating** adalah nilai rating berupa angka desimal (float), yang juga memiliki beberapa data yang hilang.
+- **members** menunjukkan jumlah anggota atau pengguna yang mengikuti atau menonton anime tersebut, berupa integer.
+
+# Deskripsi DataFrame Rating Anime
+
+DataFrame ini berisi data rating anime oleh pengguna dengan total 7.813.737 baris dan 3 kolom sebagai berikut:
+
+| No | Nama Kolom | Tipe Data | Keterangan                        |
+|----|------------|-----------|---------------------------------|
+| 0  | user_id    | int64     | ID unik pengguna yang memberi rating |
+| 1  | anime_id   | int64     | ID unik anime yang diberi rating |
+| 2  | rating     | int64     | Nilai rating yang diberikan pengguna |
+
+## Penjelasan:
+
+- **user_id** adalah kolom numerik bertipe integer yang mengidentifikasi setiap pengguna secara unik.
+- **anime_id** merupakan kolom integer yang menunjukkan anime yang dirating oleh pengguna.
+- **rating** adalah nilai rating dalam bentuk integer yang diberikan oleh pengguna pada anime tersebut.
+
 
 ### Visualisasi dan EDA
 
@@ -76,36 +117,60 @@ Dataset yang digunakan diambil dari [MyAnimeList Database via Kaggle](https://ww
 
 ### Langkah-Langkah Pra-Pemrosesan:
 
-* Menghapus rating = -1 (artinya user belum memberikan rating):
-
-```python
-ratings = ratings[ratings['rating'] != -1]
-```
-
-* Menghapus baris anime tanpa nama:
-
+1. **Menghapus entri anime tanpa nama**:
 ```python
 anime.dropna(subset=['name'], inplace=True)
 ```
 
-* Mengisi genre kosong dengan string kosong:
+Beberapa entri dalam dataset `anime.csv` tidak memiliki judul (name). Karena judul anime penting sebagai identitas utama dalam sistem rekomendasi (terutama pada Content-Based Filtering), maka baris-baris yang tidak memiliki nama dihapus untuk menjaga konsistensi dan integritas data.
 
+2. **Menghapus rating tidak sah (rating = -1)**:
+```python
+ratings = ratings[ratings['rating'] != -1]
+```
+
+Dalam dataset `rating.csv`, rating `-1` menandakan bahwa pengguna belum memberikan rating yang sebenarnya. Karena nilai ini tidak mencerminkan preferensi nyata, maka baris-baris tersebut dihapus agar tidak mengganggu perhitungan kesamaan atau prediksi rating.
+
+3. **Mengisi genre kosong dengan string kosong**:
 ```python
 anime['genre'] = anime['genre'].fillna('')
 ```
 
-* Melakukan TF-IDF vectorization pada kolom genre:
+`Genre` yang kosong akan menyebabkan error saat dilakukan proses vektorisasi dengan TF-IDF. Oleh karena itu, nilai `NaN` pada kolom `genre` diganti dengan string kosong (`''`) agar tetap bisa diproses secara tekstual.
 
+4. **TF-IDF vectorization pada kolom genre**:
 ```python
 tfidf = TfidfVectorizer(stop_words='english')
 tfidf_matrix = tfidf.fit_transform(anime['genre'])
 ```
+
+`TF-IDF` digunakan untuk mengubah data genre yang berupa teks menjadi representasi numerik. Bobot yang diberikan oleh TF-IDF mencerminkan seberapa penting suatu genre dalam konteks keseluruhan dataset. Vektor inilah yang kemudian digunakan untuk menghitung kemiripan antar anime menggunakan cosine similarity.
+
+5. **Membentuk matriks user-anime**:
+```python
+user_anime_matrix = ratings.pivot_table(index='user_id', columns='anime_id', values='rating')
+user_anime_matrix.fillna(0, inplace=True)
+```
+
+Langkah ini menyusun data rating menjadi sebuah matriks dua dimensi (pivot table) di mana baris adalah pengguna dan kolom adalah anime. Matriks ini digunakan dalam Collaborative Filtering. Nilai `NaN` diisi dengan nol untuk menyatakan bahwa pengguna belum menilai anime tersebut.
+
+
+6. **Membagi data untuk evaluasi Content-Based**:
+```python
+from sklearn.model_selection import train_test_split
+train_data, test_data = train_test_split(ratings, test_size=0.2, random_state=42)
+```
+
+Dataset dibagi menjadi data latih dan data uji. Hal ini penting agar sistem dapat dievaluasi secara objektif. Data latih digunakan untuk membangun model, sedangkan data uji digunakan untuk menghitung performa sistem seperti Precision@10 dan Recall@10.
+
+---
 
 ### Tujuan:
 
 * Membersihkan data yang tidak valid.
 * Menyusun format input yang siap digunakan untuk perhitungan similarity.
 * Membuat representasi numerik dari genre yang dapat dihitung secara matematis.
+* Mempersiapkan data untuk pengujian dan mengetahui hasil performa.
 
 ---
 
@@ -179,27 +244,32 @@ Menggunakan user-anime rating matrix untuk menghitung kesamaan antar pengguna.
 
 ## Evaluation
 
-### Metrik: Root Mean Squared Error (RMSE)
+### Metrik Evaluasi
 
-RMSE digunakan untuk mengukur seberapa jauh prediksi sistem terhadap nilai rating aktual.
+1. **Content-Based Filtering**  
+   Menggunakan metrik **Precision@10** dan **Recall@10** untuk mengukur seberapa relevan hasil rekomendasi dibanding anime yang benar-benar ditonton user dalam data uji.
 
-#### Formula:
+   #### Hasil:
+   * **Average Precision@10**: *0.0158*  
+   * **Average Recall@10**: *0.0177*
 
-$$
-\text{RMSE} = \sqrt{\frac{1}{n} \sum_{i=1}^{n} (\hat{y}_i - y_i)^2}
-$$
+   **Interpretasi:**  
+   - Precision@10 sebesar 1.58% berarti dari 10 anime yang direkomendasikan, rata-rata sekitar 0.158 di antaranya relevan atau ditonton oleh pengguna.
+   - Recall@10 sebesar 1.77% menunjukkan bahwa dari semua anime yang seharusnya direkomendasikan, hanya 1.77% yang berhasil ditangkap oleh sistem dalam 10 rekomendasi teratas.
 
-Semakin kecil nilai RMSE, maka semakin baik prediksi yang diberikan.
+2. **Collaborative Filtering (User-Based)**  
+   Menggunakan **Root Mean Squared Error (RMSE)** untuk mengukur deviasi prediksi terhadap rating aktual.
 
-### Hasil Evaluasi
+   #### Formula:
+   $$
+   \text{RMSE} = \sqrt{\frac{1}{n} \sum_{i=1}^{n} (\hat{y}_i - y_i)^2}
+   $$
 
-* **RMSE** pada subset collaborative filtering (1000 sample): **1.3930**
+   #### Hasil:
+   * **RMSE** pada subset collaborative filtering (1000 sample): **1.3930**
 
-### Interpretasi:
-
-* Nilai RMSE sekitar 1.39 menunjukkan bahwa prediksi rating berbeda sekitar 1.39 poin dari nilai sebenarnya. Ini masih termasuk toleransi yang bisa diterima dalam sistem rekomendasi dasar.
-
----
+   **Interpretasi:**  
+   Nilai RMSE sekitar 1.39 menandakan bahwa rata-rata prediksi sistem berbeda sekitar 1.39 poin dari rating sebenarnya — cukup wajar untuk sistem rekomendasi dasar.
 
 ## Referensi
 

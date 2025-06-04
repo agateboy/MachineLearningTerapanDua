@@ -122,6 +122,54 @@ def get_content_recommendations(title, top_n=10):
 print("\nContent-Based Top 10 Recommendations for 'Naruto':")
 print(get_content_recommendations("Naruto"))
 
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+train_ratings, test_ratings = train_test_split(ratings, test_size=0.2, random_state=42)
+
+def evaluate_content_based(model_recommendation_function, train_data, test_data, k=10):
+    actual_items = test_data.groupby('user_id')['anime_id'].apply(list).to_dict()
+
+    precision_list = []
+    recall_list = []
+
+    test_users = test_data['user_id'].unique()
+
+    for user_id in test_users:
+        user_anime_train = train_data[train_data['user_id'] == user_id]['anime_id'].tolist()
+
+        if not user_anime_train:
+            continue
+
+        sample_anime_id = user_anime_train[0]
+        sample_anime_name = anime[anime['anime_id'] == sample_anime_id]['name'].iloc[0]
+
+        recommended_anime_names = model_recommendation_function(sample_anime_name, top_n=k)['name'].tolist()
+
+        recommended_anime_ids = anime[anime['name'].isin(recommended_anime_names)]['anime_id'].tolist()
+
+        actual_rated_anime_ids = actual_items.get(user_id, [])
+
+        relevant_recommended_items = len(set(recommended_anime_ids) & set(actual_rated_anime_ids))
+
+        if len(recommended_anime_ids) > 0:
+            precision = relevant_recommended_items / len(recommended_anime_ids)
+            precision_list.append(precision)
+
+        if len(actual_rated_anime_ids) > 0:
+            recall = relevant_recommended_items / len(actual_rated_anime_ids)
+            recall_list.append(recall)
+
+    avg_precision = np.mean(precision_list) if precision_list else 0
+    avg_recall = np.mean(recall_list) if recall_list else 0
+
+    return avg_precision, avg_recall
+
+avg_precision_cb, avg_recall_cb = evaluate_content_based(get_content_recommendations, train_ratings, test_ratings, k=10)
+
+print(f"\nAverage Precision for Content-Based Filtering: {avg_precision_cb:.4f}")
+print(f"Average Recall for Content-Based Filtering: {avg_recall_cb:.4f}")
+
 """# Model Development Collaborative Filtering (User-Based)"""
 
 user_anime_matrix = ratings.pivot_table(index='user_id', columns='anime_id', values='rating')
